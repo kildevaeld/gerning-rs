@@ -12,15 +12,15 @@ use core::{marker::PhantomData, pin::Pin};
 #[cfg(feature = "async")]
 use futures_core::Future;
 
-pub trait Callable<V: Value> {
+pub trait Callable<C, V: Value> {
     fn signature(&self) -> Signature<V>;
 
-    fn call(&self, args: Arguments<V>) -> Result<V, Error<V>>;
+    fn call(&self, ctx: &mut C, args: Arguments<V>) -> Result<V, Error<V>>;
 }
 
-impl<F, U, E, V: Value> Callable<V> for F
+impl<F, C, U, E, V: Value> Callable<C, V> for F
 where
-    F: Fn(Arguments<V>) -> Result<U, E>,
+    F: Fn(&mut C, Arguments<V>) -> Result<U, E>,
     E: Into<Error<V>>,
     U: Into<V> + Typed<V>,
 {
@@ -28,8 +28,8 @@ where
         Signature::new(Parameters::new(), U::get_type())
     }
 
-    fn call(&self, args: Arguments<V>) -> Result<V, Error<V>> {
-        (self)(args).map(|m| m.into()).map_err(|e| e.into())
+    fn call(&self, ctx: &mut C, args: Arguments<V>) -> Result<V, Error<V>> {
+        (self)(ctx, args).map(|m| m.into()).map_err(|e| e.into())
     }
 }
 
@@ -67,9 +67,9 @@ impl Executor for Smol {
     }
 }
 
-pub trait CallableExt<V: Value>: Callable<V> {
+pub trait CallableExt<C, V: Value>: Callable<C, V> {
     #[cfg(feature = "async")]
-    fn into_async<E>(self) -> IntoAsync<Self, E, V>
+    fn into_async<E>(self) -> IntoAsync<Self, C, E, V>
     where
         Self: Sized,
         E: Executor,
@@ -80,7 +80,7 @@ pub trait CallableExt<V: Value>: Callable<V> {
         }
     }
 
-    fn boxed(self) -> Box<dyn Callable<V>>
+    fn boxed(self) -> Box<dyn Callable<C, V>>
     where
         Self: Sized + 'static,
     {
@@ -88,34 +88,34 @@ pub trait CallableExt<V: Value>: Callable<V> {
     }
 }
 
-impl<C, V: Value> CallableExt<V> for C where C: Callable<V> {}
+impl<C, T, V: Value> CallableExt<T, V> for C where C: Callable<T, V> {}
 
 #[cfg(feature = "async")]
-pub struct IntoAsync<C, E, V> {
+pub struct IntoAsync<C, T, E, V> {
     callable: C,
-    _executor: PhantomData<(E, V)>,
+    _executor: PhantomData<(T, E, V)>,
 }
 
 #[cfg(feature = "async")]
-impl<C, E, V> AsyncCallable<V> for IntoAsync<C, E, V>
+impl<C, T, E, V> AsyncCallable<T, V> for IntoAsync<C, T, E, V>
 where
-    C: Callable<V> + Clone + Send + 'static,
+    C: Callable<T, V> + Clone + Send + 'static,
     E: Executor + 'static,
     E::Error: core::fmt::Debug + Send + Sync + 'static,
     V: 'static + Value + Send,
     V::Type: Send,
+    T: Send + Sync + 'static + Clone,
 {
     type Future<'a> = Pin<Box<dyn Future<Output = Result<V, Error<V>>> + Send + 'a>>;
     fn signature(&self) -> Signature<V> {
         self.callable.signature()
     }
 
-    fn call_async(&self, args: Arguments<V>) -> Self::Future<'_> {
+    fn call_async(&self, ctx: &mut T, args: Arguments<V>) -> Self::Future<'_> {
         let callable = self.callable.clone();
+        let mut ctx = ctx.clone();
         Box::pin(async move {
-            
-
-            E::spawn_blocking(move || callable.call(args))
+            E::spawn_blocking(move || callable.call(&mut ctx, args))
                 .await
                 .map_err(|err| Error::Runtime(Box::new(err)))?
         })

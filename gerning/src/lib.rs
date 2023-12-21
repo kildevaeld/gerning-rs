@@ -14,7 +14,7 @@ mod traits;
 pub mod arguments;
 pub mod signature;
 
-pub use self::{callable::*, callable_fn::*, error::*, resultable::*, traits::*};
+pub use self::{callable::*, callable_fn::*, error::*, func::*, resultable::*, traits::*};
 
 #[cfg(feature = "async")]
 pub use self::callable_async::*;

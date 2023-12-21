@@ -1,8 +1,9 @@
 use std::convert::Infallible;
 
+use futures_core::Future;
 use gerning::{
     arguments::{Arguments, ToArguments},
-    AsyncCallable, AsyncCallableExt, Callable, CallableFunc, Error, FuncExt,
+    AsyncCallable, AsyncCallableExt, AsyncFunc, Callable, CallableFunc, Error, Func, FuncExt,
 };
 
 #[derive(Debug)]
@@ -91,24 +92,36 @@ impl<'a> gerning::Typed<Value> for &'a str {
     }
 }
 
-fn test(_test: String) -> Result<String, Error<Value>> {
+fn test<C>(ctx: &mut C, _test: String) -> Result<String, Error<Value>> {
     Ok(String::from("Test func"))
+}
+
+async fn test_async(ctx: &mut (), _test: String) -> Result<String, Error<Value>> {
+    Ok(String::from("Test func"))
+}
+
+async fn method<F: AsyncFunc<(), (String,)>>(func: F) {
+    func.call(&mut (), (String::from("value"),)).await;
 }
 
 fn main() -> Result<(), Error<Value>> {
     let callable = test.callable();
+    // let async_callable = test_async.callable();
 
     println!("Signature: {:?}", callable.signature());
 
-    let ret = callable.call(("",).to_arguments())?;
+    let ret = callable.call(&mut (), ("",).to_arguments())?;
 
     println!("RET: {:?}", ret);
-    let action = CallableFunc::new(|person: String| async move {
+    let action = CallableFunc::new(|ctx: &mut (), person: String| async move {
         Result::<_, Error<Value>>::Ok(format!("Hello, {}", person))
-    })
-    .boxed();
+    });
 
-    action.call_async(Arguments::default());
+    
+
+    action.call_async(&mut (), Arguments::default());
+
+    // async_callable.call_async(&mut (), Arguments::default());
     // let callable = test.callable();
 
     // // let ret = callable.call(Arguments::default())?;

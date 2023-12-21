@@ -3,7 +3,7 @@ use crate::callable_async::AsyncCallable;
 #[cfg(feature = "async")]
 use core::marker::PhantomData;
 #[cfg(feature = "async")]
-use core::{future::Future, pin::Pin};
+use core::{pin::Pin};
 use pin_project_lite::pin_project;
 
 use crate::{
@@ -14,12 +14,12 @@ use crate::{
     Callable, Error, Resultable,
 };
 
-pub struct CallableFunc<F, A, V> {
+pub struct CallableFunc<F, C, A, V> {
     func: F,
-    _args: PhantomData<(A, V)>,
+    _args: PhantomData<(C, A, V)>,
 }
 
-impl<F: Clone, A, V> Clone for CallableFunc<F, A, V> {
+impl<F: Clone, C, A, V> Clone for CallableFunc<F, C, A, V> {
     fn clone(&self) -> Self {
         CallableFunc {
             func: self.func.clone(),
@@ -28,19 +28,19 @@ impl<F: Clone, A, V> Clone for CallableFunc<F, A, V> {
     }
 }
 
-impl<F: Copy, A, V> Copy for CallableFunc<F, A, V> {}
+impl<F: Copy, C, A, V> Copy for CallableFunc<F, C, A, V> {}
 
-unsafe impl<F: Send, A, V> Send for CallableFunc<F, A, V> {}
+unsafe impl<F: Send, C, A, V> Send for CallableFunc<C, F, A, V> {}
 
-unsafe impl<F: Sync, A, V> Sync for CallableFunc<F, A, V> {}
+unsafe impl<F: Sync, C, A, V> Sync for CallableFunc<C, F, A, V> {}
 
-impl<F, A, V: Value> CallableFunc<F, A, V>
+impl<F, C, A, V: Value> CallableFunc<F, C, A, V>
 where
     for<'a> A: FromArguments<'a, V>,
 {
     pub fn new(func: F) -> Self
     where
-        F: crate::func::Func<A>,
+        F: crate::func::Func<C, A>,
     {
         CallableFunc {
             func,
@@ -49,10 +49,10 @@ where
     }
 }
 
-impl<F, A, V: Value> Callable<V> for CallableFunc<F, A, V>
+impl<F, C, A, V: Value> Callable<C, V> for CallableFunc<F, C, A, V>
 where
     for<'a> A: FromArguments<'a, V>,
-    F: crate::func::Func<A>,
+    F: crate::func::Func<C, A>,
     F::Output: Resultable,
     <F::Output as Resultable>::Ok: Into<V> + Typed<V>,
     <F::Output as Resultable>::Error: Into<Error<V>>,
@@ -64,12 +64,12 @@ where
         )
     }
 
-    fn call(&self, args: Arguments<V>) -> Result<V, Error<V>> {
+    fn call<'a>(&self, ctx: &'a mut C, args: Arguments<V>) -> Result<V, Error<V>> {
         let args = A::from_arguments(&args).map_err(|err| err.into())?;
 
         Ok(self
             .func
-            .call(args)
+            .call(ctx, args)
             .into_result()
             .map_err(Into::into)?
             .into())
@@ -77,31 +77,32 @@ where
 }
 
 #[cfg(feature = "async")]
-impl<F, A, V: Value + 'static> AsyncCallable<V> for CallableFunc<F, A, V>
+impl<F, C, A, V: Value + 'static> AsyncCallable<C, V> for CallableFunc<F, C, A, V>
 where
     for<'a> A: FromArguments<'a, V> + 'a,
-    F: crate::func::Func<A> + Clone + 'static,
-    F::Output: Future,
-    <F::Output as Future>::Output: Resultable,
-    <<F::Output as Future>::Output as Resultable>::Error: Into<Error<V>>,
-    <<F::Output as Future>::Output as Resultable>::Ok: Into<V> + Typed<V>,
+    // for<'a> C: 'a,
+    F: crate::func::AsyncFunc<C, A> + 'static,
+    // for<'a> F::Output<'a>: Future + 'a,
+    F::Output: Resultable,
+    <F::Output as Resultable>::Error: Into<Error<V>>,
+    <F::Output as Resultable>::Ok: Into<V> + Typed<V>,
 {
-    type Future<'a> = CallableFuncFuture<'a, F::Output, V>;
+    type Future<'a> = CallableFuncFuture<'a, F::Future<'a>, V> where C: 'a;
 
     fn signature(&self) -> Signature<V> {
         Signature::new(
             A::parameters(),
-            <<<F::Output as Future>::Output as Resultable>::Ok as Typed<V>>::get_type(),
+            <<F::Output as Resultable>::Ok as Typed<V>>::get_type(),
         )
     }
 
-    fn call_async(&self, args: Arguments<V>) -> Self::Future<'_> {
+    fn call_async<'a>(&'a self, ctx: &'a mut C, args: Arguments<V>) -> Self::Future<'a> {
         let state = match A::from_arguments(&args).map_err(|err| err.into()) {
             Err(err) => CallableFuncFutureState::Error {
                 error: Some(err.into()),
             },
             Ok(args) => CallableFuncFutureState::Future {
-                future: self.func.call(args),
+                future: self.func.call(ctx, args),
             },
         };
 
@@ -156,9 +157,7 @@ where
         let this = self.as_mut().project();
 
         match this.func.project() {
-            EnumProj::Error { error } => {
-                Poll::Ready(Err(error.take().expect("call after finish")))
-            }
+            EnumProj::Error { error } => Poll::Ready(Err(error.take().expect("call after finish"))),
             EnumProj::Future { future } => match future.poll(cx) {
                 Poll::Pending => Poll::Pending,
                 Poll::Ready(ret) => match ret.into_result() {
@@ -170,8 +169,8 @@ where
     }
 }
 
-pub trait FuncExt<A>: Func<A> {
-    fn callable<V: Value>(self) -> CallableFunc<Self, A, V>
+pub trait FuncExt<C, A>: Func<C, A> {
+    fn callable<V: Value>(self) -> CallableFunc<Self, C, A, V>
     where
         Self: Sized,
         for<'a> A: FromArguments<'a, V>,
@@ -180,4 +179,4 @@ pub trait FuncExt<A>: Func<A> {
     }
 }
 
-impl<F, A> FuncExt<A> for F where F: Func<A> {}
+impl<F, C, A> FuncExt<C, A> for F where F: Func<C, A> {}
