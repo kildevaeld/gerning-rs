@@ -92,7 +92,7 @@ impl<'a> gerning::Typed<Value> for &'a str {
     }
 }
 
-fn test<C>(ctx: &mut C, _test: String) -> Result<String, Error<Value>> {
+fn test<'a, C>(ctx: &'a mut C, _test: String) -> Result<String, Error<Value>> {
     Ok(String::from("Test func"))
 }
 

@@ -17,7 +17,7 @@ pub trait AsyncCallable<C, V: Value> {
 }
 
 pub trait AsyncCallableExt<C, V: Value>: AsyncCallable<C, V> {
-    fn boxed(self) -> BoxAsyncCallable<C, V>
+    fn boxed(self) -> BoxAsyncCallable<'static, C, V>
     where
         Self: Sized + 'static + Send + Sync,
         for<'a> Self::Future<'a>: Send,
@@ -27,7 +27,7 @@ pub trait AsyncCallableExt<C, V: Value>: AsyncCallable<C, V> {
         Box::new(self)
     }
 
-    fn boxed_local(self) -> LocalBoxAsyncCallable<C, V>
+    fn boxed_local(self) -> LocalBoxAsyncCallable<'static, C, V>
     where
         Self: Sized + 'static + Send + Sync,
         V: 'static,
@@ -39,9 +39,9 @@ pub trait AsyncCallableExt<C, V: Value>: AsyncCallable<C, V> {
 
 impl<T, C, V: Value> AsyncCallableExt<C, V> for T where T: AsyncCallable<C, V> {}
 
-pub type BoxAsyncCallable<C, V> = Box<dyn internal::BoxAsyncCall<C, V> + Send + Sync>;
+pub type BoxAsyncCallable<'a, C, V> = Box<dyn internal::BoxAsyncCall<C, V> + Send + Sync + 'a>;
 
-pub type LocalBoxAsyncCallable<C, V> = Box<dyn internal::BoxLocalAsyncCall<C, V> + Send + Sync>;
+pub type LocalBoxAsyncCallable<'a, C, V> = Box<dyn internal::BoxLocalAsyncCall<C, V> + Send + Sync + 'a>;
 
 mod internal {
     use futures_core::future::LocalBoxFuture;
@@ -106,8 +106,8 @@ mod internal {
     }
 }
 
-impl<C: 'static, V: Value + 'static> AsyncCallable<C, V> for BoxAsyncCallable<C, V> {
-    type Future<'a> = BoxFuture<'a, Result<V, Error<V>>>;
+impl<C, V: Value + 'static> AsyncCallable<C, V> for BoxAsyncCallable<'static, C, V> {
+    type Future<'a> = BoxFuture<'a, Result<V, Error<V>>> where C:'a;
     fn signature(&self) -> Signature<V> {
         (**self).signature()
     }
@@ -116,8 +116,8 @@ impl<C: 'static, V: Value + 'static> AsyncCallable<C, V> for BoxAsyncCallable<C,
     }
 }
 
-impl<C: 'static, V: Value + 'static> AsyncCallable<C, V> for LocalBoxAsyncCallable<C, V> {
-    type Future<'a> = LocalBoxFuture<'a, Result<V, Error<V>>>;
+impl<C, V: Value + 'static> AsyncCallable<C, V> for LocalBoxAsyncCallable<'static, C, V> {
+    type Future<'a> = LocalBoxFuture<'a, Result<V, Error<V>>> where C:'a;
     fn signature(&self) -> Signature<V> {
         (**self).signature()
     }
