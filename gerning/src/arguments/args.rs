@@ -3,7 +3,7 @@ use crate::traits::Value;
 use super::error::ArgumentError;
 use alloc::vec::Vec;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Arguments<V> {
     args: Vec<V>,
 }
