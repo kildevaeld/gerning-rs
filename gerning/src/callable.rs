@@ -18,6 +18,36 @@ pub trait Callable<C, V: Value> {
     fn call(&self, ctx: &mut C, args: Arguments<V>) -> Result<V, Error<V>>;
 }
 
+// #[cfg(feature = "service")]
+// pub trait MethodCallable<S, C, V: Value> {
+//     fn signature(&self) -> Signature<V>;
+//     fn call(&self, this: &mut S, ctx: &mut C, args: Arguments<V>) -> Result<V, Error<V>>;
+// }
+
+// impl<S, C, V: Value> MethodCallable<S, C, V> for Box<dyn MethodCallable<S, C, V>> {
+//     fn signature(&self) -> Signature<V> {
+//         (**self).signature()
+//     }
+
+//     fn call(&self, this: &mut S, ctx: &mut C, args: Arguments<V>) -> Result<V, Error<V>> {
+//         (**self).call(this, ctx, args)
+//     }
+// }
+
+// #[cfg(feature = "service")]
+// impl<'a, T, S, C, V: Value> MethodCallable<S, C, V> for &'a T
+// where
+//     T: MethodCallable<S, C, V>,
+// {
+//     fn signature(&self) -> Signature<V> {
+//         (*self).signature()
+//     }
+
+//     fn call(&self, this: &mut S, ctx: &mut C, args: Arguments<V>) -> Result<V, Error<V>> {
+//         (*self).call(this, ctx, args)
+//     }
+// }
+
 impl<F, C, U, E, V: Value> Callable<C, V> for F
 where
     F: Fn(&mut C, Arguments<V>) -> Result<U, E>,
@@ -32,6 +62,23 @@ where
         (self)(ctx, args).map(|m| m.into()).map_err(|e| e.into())
     }
 }
+
+// impl<F, S, C, U, E, V: Value> MethodCallable<S, C, V> for F
+// where
+//     F: Fn(&mut S, &mut C, Arguments<V>) -> Result<U, E>,
+//     E: Into<Error<V>>,
+//     U: Into<V> + Typed<V>,
+// {
+//     fn signature(&self) -> Signature<V> {
+//         Signature::new(Parameters::new(), U::get_type())
+//     }
+
+//     fn call(&self, this: &mut S, ctx: &mut C, args: Arguments<V>) -> Result<V, Error<V>> {
+//         (self)(this, ctx, args)
+//             .map(|m| m.into())
+//             .map_err(|e| e.into())
+//     }
+// }
 
 #[cfg(feature = "async")]
 pub trait Executor {

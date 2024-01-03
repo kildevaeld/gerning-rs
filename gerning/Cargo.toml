@@ -6,8 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["async"]
+default = ["async", "service"]
 async = ["futures-core", "pin-project-lite"]
+service = []
 
 
 [dependencies]
@@ -15,3 +16,7 @@ futures-core = { version = "0.3", default-features = false, features = [
     "alloc",
 ], optional = true }
 pin-project-lite = { version = "0.2", optional = true }
+avagarden = { git = "https://github.com/kildevaeld/avagarden" }
+
+[dev-dependencies]
+futures = { version = "0.3" }

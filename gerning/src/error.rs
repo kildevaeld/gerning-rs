@@ -4,9 +4,12 @@ use crate::{arguments::ArgumentError, traits::Value};
 use alloc::{boxed::Box, fmt};
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error<V: Value> {
     Argument(ArgumentError<V>),
     Runtime(Box<dyn core::fmt::Debug + Send + Sync>),
+    #[cfg(feature = "service")]
+    MethodNotFound,
     Infallible,
 }
 
@@ -33,6 +36,8 @@ impl<V: Value> fmt::Display for Error<V> {
         match self {
             Error::Argument(a) => write!(f, "{}", a),
             Error::Runtime(e) => e.fmt(f),
+            #[cfg(feature = "service")]
+            Error::MethodNotFound => write!(f, "method not found"),
             Error::Infallible => write!(f, "infallible"),
         }
     }

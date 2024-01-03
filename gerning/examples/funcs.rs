@@ -1,12 +1,17 @@
-use std::convert::Infallible;
+use std::{collections::BTreeMap, convert::Infallible};
 
 use futures_core::Future;
 use gerning::{
     arguments::{Arguments, ToArguments},
-    AsyncCallable, AsyncCallableExt, AsyncFunc, Callable, CallableFunc, Error, Func, FuncExt,
+    service::{
+        AsyncMethodCallable, AsyncMethodCallableExt, AsyncService, SendState, Service, State,
+        SyncState,
+    },
+    AsyncCallable, AsyncCallableExt, AsyncFunc, AsyncMethod, Callable, CallableFunc, Error, Func,
+    FuncExt,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Value {
     String(String),
 }
@@ -86,6 +91,12 @@ impl gerning::Typed<Value> for String {
     }
 }
 
+impl gerning::Typed<Value> for Value {
+    fn get_type() -> <Value as gerning::Value>::Type {
+        Type::String
+    }
+}
+
 impl<'a> gerning::Typed<Value> for &'a str {
     fn get_type() -> <Value as gerning::Value>::Type {
         Type::String
@@ -113,13 +124,44 @@ fn main() -> Result<(), Error<Value>> {
     let ret = callable.call(&mut (), ("",).to_arguments())?;
 
     println!("RET: {:?}", ret);
-    let action = CallableFunc::new(|ctx: &mut (), person: String| async move {
-        Result::<_, Error<Value>>::Ok(format!("Hello, {}", person))
-    });
-
-    
+    let action = CallableFunc::new(|ctx: &mut (), person: String| {
+        to_send(async move { Result::<_, Error<Value>>::Ok(format!("Hello, {}", person)) })
+    })
+    .boxed();
 
     action.call_async(&mut (), Arguments::default());
+
+    let mut service = gerning::service::DynService::new(SyncState::new(BTreeMap::default()));
+
+    service.register(
+        "test",
+        |this: &mut BTreeMap<String, Value>, ctx: &mut (), args: Arguments<Value>| {
+            this.get("state").cloned().ok_or_else(|| Error::Infallible)
+        },
+    );
+
+    service.set_value("state", "What a wonderful world".into())?;
+
+    let ret = service.call(&mut (), "test", Arguments::default())?;
+
+    println!("RET {:?}", ret);
+
+    let mut service =
+        gerning::service::DynService::new_async_send(SendState::new(BTreeMap::default()));
+
+    service.register::<TestAsync>("test", TestAsync);
+
+    futures::executor::block_on(async move {
+        service
+            .set_value("state", "What a wonderful world async".into())
+            .await?;
+
+        let ret = service.call(&mut (), "test", Arguments::default()).await?;
+
+        println!("RET {:?}", ret);
+
+        Result::<_, Error<_>>::Ok(())
+    })?;
 
     // async_callable.call_async(&mut (), Arguments::default());
     // let callable = test.callable();
@@ -155,4 +197,34 @@ fn main() -> Result<(), Error<Value>> {
     // println!("{:?}", callable.signature());
 
     Ok(())
+}
+
+fn to_send<F>(future: F) -> impl Future<Output = F::Output> + Send
+where
+    F: Future + Send,
+{
+    future
+}
+
+struct TestAsync;
+
+impl<S: State<Value>, C> AsyncMethodCallable<S, C, Value> for TestAsync {
+    type Future<'a> = core::future::Ready<Result<Value, Error<Value>>>
+    where
+        Self: 'a,
+        C: 'a,
+        S: 'a;
+
+    fn signature(&self) -> gerning::signature::Signature<Value> {
+        todo!()
+    }
+
+    fn call_async<'a>(
+        &'a self,
+        this: &'a mut S,
+        ctx: &'a mut C,
+        args: Arguments<Value>,
+    ) -> Self::Future<'a> {
+        core::future::ready(Ok(this.get("state").unwrap().unwrap()))
+    }
 }

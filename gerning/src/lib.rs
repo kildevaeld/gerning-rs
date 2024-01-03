@@ -9,7 +9,12 @@ mod callable_fn;
 mod error;
 mod func;
 mod resultable;
+// #[cfg(feature = "service")]
+// pub mod service2;
 mod traits;
+
+#[cfg(feature = "service")]
+pub mod service;
 
 pub mod arguments;
 pub mod signature;
