@@ -1,50 +1,42 @@
-use core::cell::RefCell;
-
+use crate::{Error, Value};
 use alloc::{
-    boxed::Box,
     collections::BTreeMap,
     rc::Rc,
     string::{String, ToString},
     sync::Arc,
 };
 use avagarden::sync::Mutex;
+use core::cell::RefCell;
+#[cfg(feature = "async")]
 use futures_core::Future;
-use pin_project_lite::pin_project;
-
-use crate::{arguments::Arguments, Error, Value};
+#[cfg(feature = "async")]
+use locket::AsyncLockApi;
+use locket::{LockApi, LockApiWriteGuard, LockError};
 
 pub trait HasState {
     type State;
 }
 
 pub trait StateType<V: Value>: HasState {
-    // type State;
-    fn set(&self, name: &str, value: V) -> Result<(), Error<V>>;
-    fn get(&self, name: &str) -> Result<Option<V>, Error<V>>;
-    fn call<F>(&self, func: F) -> Result<V, Error<V>>
+    type Ref<'a>: LockApiWriteGuard<'a, Self::State>
     where
-        F: FnOnce(&mut Self::State) -> Result<V, Error<V>>;
+        Self: 'a,
+        Self::State: 'a;
+
+    fn get<'a>(&'a self) -> Result<Self::Ref<'a>, LockError>;
 }
 
 #[cfg(feature = "async")]
 pub trait AsyncStateType<V: Value>: HasState {
-    type Get<'a>: Future<Output = Result<Option<V>, Error<V>>>
+    type Ref<'a>: LockApiWriteGuard<'a, Self::State>
     where
-        Self: 'a;
-    type Set<'a>: Future<Output = Result<(), Error<V>>>
-    where
-        Self: 'a;
-    type Call<'a, F>: Future<Output = Result<V, Error<V>>>
+        Self: 'a,
+        Self::State: 'a;
+    type Future<'a>: Future<Output = Result<Self::Ref<'a>, LockError>>
     where
         Self: 'a;
 
-    fn set<'a>(&'a self, name: &'a str, value: V) -> Self::Set<'a>;
-    fn get<'a>(&'a self, name: &'a str) -> Self::Get<'a>;
-    fn call<'a, F, U>(&self, func: F) -> Self::Call<'a, U>
-    where
-        Self::State: 'a,
-        F: FnOnce(&'a mut Self::State) -> U,
-        U: Future<Output = Result<V, Error<V>>>;
+    fn get<'a>(&'a self) -> Self::Future<'a>;
 }
 
 pub struct SendState<T> {
@@ -68,31 +60,52 @@ impl<T> SendState<T> {
 }
 
 #[cfg(feature = "async")]
-impl<T: State<V>, V: Value> AsyncStateType<V> for SendState<T> {
-    type Get<'a> = core::future::Ready<Result<Option<V>, Error<V>>> where T: 'a;
-    type Set<'a> = core::future::Ready<Result<(), Error<V>>> where T: 'a;
-    type Call<'a, U> = core::future::Ready<Result<V, Error<V>>> where T: 'a;
-
-    fn set<'a>(&'a self, name: &'a str, value: V) -> Self::Set<'a> {
-        core::future::ready(self.state.lock().set(name, value))
-    }
-
-    fn get<'a>(&'a self, name: &'a str) -> Self::Get<'a> {
-        core::future::ready(self.state.lock().get(name))
-    }
-
-    fn call<'a, F, U>(&self, func: F) -> Self::Call<'a, U>
+impl<T: State<V> + 'static, V: Value> AsyncStateType<V> for SendState<T> {
+    type Ref<'a>: = avagarden::sync::MutexGuard<'a, T>
     where
-        Self::State: 'a,
-        F: FnOnce(&'a mut Self::State) -> U,
-        U: Future<Output = Result<V, Error<V>>>,
-    {
-        let mut state = self.state.lock();
-        // func(&mut *state)
-        todo!()
+        Self: 'a,
+        Self::State: 'a;
+    type Future<'a> = core::future::Ready<Result<Self::Ref<'a>, LockError>> where Self: 'a, T: 'a;
+
+    fn get<'a>(&'a self) -> Self::Future<'a> {
+        core::future::ready(<Arc<Mutex<T>> as LockApi<T>>::write(&self.state))
     }
 }
 
+pub struct AsyncState<T> {
+    state: Arc<async_lock::Mutex<T>>,
+}
+
+unsafe impl<T: Send> Send for AsyncState<T> {}
+
+unsafe impl<T: Send> Sync for AsyncState<T> {}
+
+impl<T> HasState for AsyncState<T> {
+    type State = T;
+}
+
+impl<T> AsyncState<T> {
+    pub fn new(state: T) -> AsyncState<T> {
+        AsyncState {
+            state: Arc::new(async_lock::Mutex::new(state)),
+        }
+    }
+}
+
+#[cfg(feature = "async")]
+impl<T: State<V> + 'static + Send, V: Value> AsyncStateType<V> for AsyncState<T> {
+    type Ref<'a>: = async_lock::MutexGuard<'a, T>
+    where
+        Self: 'a,
+        Self::State: 'a;
+    type Future<'a> = locket::FutureResult<async_lock::futures::Lock<'a, T>> where Self: 'a, T: 'a;
+
+    fn get<'a>(&'a self) -> Self::Future<'a> {
+        <Arc<async_lock::Mutex<T>> as AsyncLockApi<T>>::write(&self.state)
+    }
+}
+
+//
 pub struct SyncState<T> {
     state: Rc<RefCell<T>>,
 }
@@ -109,47 +122,11 @@ impl<T> HasState for SyncState<T> {
     type State = T;
 }
 
-impl<T: State<V>, V: Value> StateType<V> for SyncState<T> {
-    fn set(&self, name: &str, value: V) -> Result<(), Error<V>> {
-        self.state.borrow_mut().set(name, value)
-    }
+impl<T: State<V> + 'static, V: Value> StateType<V> for SyncState<T> {
+    type Ref<'a> = core::cell::RefMut<'a, T> where Self: 'a, T: 'a;
 
-    fn get(&self, name: &str) -> Result<Option<V>, Error<V>> {
-        self.state.borrow().get(name)
-    }
-
-    fn call<F>(&self, func: F) -> Result<V, Error<V>>
-    where
-        F: FnOnce(&mut Self::State) -> Result<V, Error<V>>,
-    {
-        let mut state = self.state.borrow_mut();
-        func(&mut *state)
-    }
-}
-
-#[cfg(feature = "async")]
-impl<T: State<V>, V: Value> AsyncStateType<V> for SyncState<T> {
-    type Get<'a> = core::future::Ready<Result<Option<V>, Error<V>>> where T: 'a;
-    type Set<'a> = core::future::Ready<Result<(), Error<V>>> where T: 'a;
-    type Call<'a, U> = core::future::Ready<Result<V, Error<V>>> where T: 'a;
-
-    fn set<'a>(&'a self, name: &'a str, value: V) -> Self::Set<'a> {
-        core::future::ready(self.state.borrow_mut().set(name, value))
-    }
-
-    fn get<'a>(&'a self, name: &'a str) -> Self::Get<'a> {
-        core::future::ready(self.state.borrow().get(name))
-    }
-
-    fn call<'a, F, U>(&self, func: F) -> Self::Call<'a, U>
-    where
-        Self::State: 'a,
-        F: FnOnce(&'a mut Self::State) -> U,
-        U: Future<Output = Result<V, Error<V>>>,
-    {
-        let mut state = self.state.borrow_mut();
-        // func(&mut *state)
-        todo!()
+    fn get<'a>(&'a self) -> Result<Self::Ref<'a>, LockError> {
+        <RefCell<T> as LockApi<T>>::write(&*self.state)
     }
 }
 

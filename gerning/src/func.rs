@@ -203,81 +203,80 @@ mod async_method_impl {
     funcs!(T1 T2 T3 T4 T5 T6 T7 T8);
 }
 
-#[cfg(all(feature = "service", feature = "async"))]
-pub use async_method_impl::*;
+// #[cfg(all(feature = "service", feature = "async"))]
+// pub use async_method_impl::*;
 
-#[cfg(all(feature = "service", not(feature = "async")))]
-mod method_impl {
-    use futures_core::Future;
+// #[cfg(all(feature = "service", not(feature = "async")))]
+// mod method_impl {
 
-    pub trait Method<C, T> {
-        type Output;
-        type Future<'a>: Future<Output = Self::Output> + 'a
-        where
-            Self: 'a,
-            C: 'a;
+//     pub trait Method<C, T> {
+//         type Output;
+//         type Future<'a>: Future<Output = Self::Output> + 'a
+//         where
+//             Self: 'a,
+//             C: 'a;
 
-        fn call<'a>(&'a self, ctx: &'a mut C, input: T) -> Self::Future<'a>;
-    }
+//         fn call<'a>(&'a self, ctx: &'a mut C, input: T) -> Self::Future<'a>;
+//     }
 
-    impl<F, C, U> Method<C, ()> for F
-    where
-        F: 'static,
-        for<'a> F: Fn(&'a mut C) -> U,
-        U: Future,
-        for<'a> U: 'a,
-    {
-        type Output = U::Output;
-        type Future<'a> = U where  C: 'a;
+//     impl<F, C, U> Method<C, ()> for F
+//     where
+//         F: 'static,
+//         for<'a> F: Fn(&'a mut C) -> U,
+//         U: Future,
+//         for<'a> U: 'a,
+//     {
+//         type Output = U::Output;
+//         type Future<'a> = U where  C: 'a;
 
-        fn call<'a>(&'a self, ctx: &'a mut C, _input: ()) -> Self::Future<'a> {
-            (self)(ctx)
-        }
-    }
+//         fn call<'a>(&'a self, ctx: &'a mut C, _input: ()) -> Self::Future<'a> {
+//             (self)(ctx)
+//         }
+//     }
 
-    macro_rules! funcs {
-        ($first: ident) => {
-            impl< F, C, U, $first> Method<C, ($first,)> for F
-            where
-                F: 'static,
-                F: Fn(&mut C, $first) -> U,
-                U: Future,
-                for<'a> U: 'a
-                // for< U: 'a,
-                // for< C: 'a
-            {
-                type Output = U::Output;
-                type Future<'a> = U where C: 'a;
-                fn call<'a>(&'a  self, ctx: &'a mut C, input: ($first,)) -> Self::Future<'a> {
-                   (self)(ctx, input.0)
-                }
-            }
-        };
-        ($first: ident $($rest: ident)*) => {
-            funcs!($($rest)*);
+//     macro_rules! funcs {
+//         ($first: ident) => {
+//             impl< F, C, U, $first> Method<C, ($first,)> for F
+//             where
+//                 F: 'static,
+//                 F: Fn(&mut C, $first) -> U,
+//                 U: Future,
+//                 for<'a> U: 'a
+//                 // for< U: 'a,
+//                 // for< C: 'a
+//             {
+//                 type Output = U::Output;
+//                 type Future<'a> = U where C: 'a;
+//                 fn call<'a>(&'a  self, ctx: &'a mut C, input: ($first,)) -> Self::Future<'a> {
+//                    (self)(ctx, input.0)
+//                 }
+//             }
+//         };
+//         ($first: ident $($rest: ident)*) => {
+//             funcs!($($rest)*);
 
-            impl< F, C, U, $first, $($rest),*> Method<C, ($first, $($rest),*)> for F
-            where
-                 F: Fn(&mut C, $first, $($rest),*) -> U + 'static,
-                 U: Future,
-                 for<'a> U: 'a
+//             impl< F, C, U, $first, $($rest),*> Method<C, ($first, $($rest),*)> for F
+//             where
+//                  F: Fn(&mut C, $first, $($rest),*) -> U + 'static,
+//                  U: Future,
+//                  for<'a> U: 'a
 
 
-            {
-                type Output = U::Output;
-                type Future<'a> = U where C:'a;
-                fn call<'a>(&'a self,ctx: &'a mut C, input: ($first, $($rest),*)) -> Self::Future<'a> {
-                    #[allow(non_snake_case)]
-                    let ($first, $($rest),*) = input;
-                    (self)(ctx,$first, $($rest),*)
-                }
-            }
+//             {
+//                 type Output = U::Output;
+//                 type Future<'a> = U where C:'a;
+//                 fn call<'a>(&'a self,ctx: &'a mut C, input: ($first, $($rest),*)) -> Self::Future<'a> {
+//                     #[allow(non_snake_case)]
+//                     let ($first, $($rest),*) = input;
+//                     (self)(ctx,$first, $($rest),*)
+//                 }
+//             }
 
-        };
-    }
+//         };
+//     }
 
-    funcs!(T1 T2 T3 T4 T5 T6 T7 T8);
-}
+//     funcs!(T1 T2 T3 T4 T5 T6 T7 T8);
+// }
 
-#[cfg(all(feature = "service", not(feature = "async")))]
-pub use method_impl::*;
+// #[cfg(all(feature = "service", not(feature = "async")))]
+// pub use method_impl::*;

@@ -9,3 +9,6 @@ pub use self::{
     service::*,
     state::{SendState, State, SyncState},
 };
+
+#[cfg(feature = "async")]
+pub use self::state::AsyncState;

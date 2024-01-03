@@ -6,9 +6,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["async", "service"]
-async = ["futures-core", "pin-project-lite"]
-service = []
+default = []
+async = [
+    "futures-core",
+    "pin-project-lite",
+    "locket?/async",
+    "locket?/async-lock",
+    "async-lock",
+]
+service = ["locket"]
+
+std = ["avagarden/std", "locket?/parking_lot"]
 
 
 [dependencies]
@@ -17,6 +25,16 @@ futures-core = { version = "0.3", default-features = false, features = [
 ], optional = true }
 pin-project-lite = { version = "0.2", optional = true }
 avagarden = { git = "https://github.com/kildevaeld/avagarden" }
+locket = { git = "https://github.com/kildevaeld/locket-rs", optional = true, features = [
+    "spin",
+] }
+async-lock = { version = "3", optional = true, default-features = false }
 
 [dev-dependencies]
 futures = { version = "0.3" }
+
+
+[[example]]
+path = "examples/funcs.rs"
+name = "funcs"
+required-features = ["async", "service"]

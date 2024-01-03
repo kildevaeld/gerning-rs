@@ -4,11 +4,10 @@ use futures_core::Future;
 use gerning::{
     arguments::{Arguments, ToArguments},
     service::{
-        AsyncMethodCallable, AsyncMethodCallableExt, AsyncService, SendState, Service, State,
-        SyncState,
+        AsyncMethodCallable, AsyncMethodCallableExt, AsyncService, AsyncState, SendState, Service,
+        State, SyncState,
     },
-    AsyncCallable, AsyncCallableExt, AsyncFunc, AsyncMethod, Callable, CallableFunc, Error, Func,
-    FuncExt,
+    AsyncCallable, AsyncCallableExt, AsyncFunc, Callable, CallableFunc, Error, Func, FuncExt,
 };
 
 #[derive(Debug, Clone)]
@@ -147,7 +146,7 @@ fn main() -> Result<(), Error<Value>> {
     println!("RET {:?}", ret);
 
     let mut service =
-        gerning::service::DynService::new_async_send(SendState::new(BTreeMap::default()));
+        gerning::service::DynService::new_async_send(AsyncState::new(BTreeMap::default()));
 
     service.register::<TestAsync>("test", TestAsync);
 

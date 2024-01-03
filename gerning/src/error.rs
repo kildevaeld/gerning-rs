@@ -10,6 +10,8 @@ pub enum Error<V: Value> {
     Runtime(Box<dyn core::fmt::Debug + Send + Sync>),
     #[cfg(feature = "service")]
     MethodNotFound,
+    #[cfg(feature = "service")]
+    Lock,
     Infallible,
 }
 
@@ -39,6 +41,15 @@ impl<V: Value> fmt::Display for Error<V> {
             #[cfg(feature = "service")]
             Error::MethodNotFound => write!(f, "method not found"),
             Error::Infallible => write!(f, "infallible"),
+            #[cfg(feature = "service")]
+            Error::Lock => write!(f, "lock"),
         }
+    }
+}
+
+#[cfg(feature = "service")]
+impl<V: Value> From<locket::LockError> for Error<V> {
+    fn from(_value: locket::LockError) -> Self {
+        Error::Lock
     }
 }

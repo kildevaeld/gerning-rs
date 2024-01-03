@@ -1,27 +1,27 @@
-use core::cell::RefCell;
-
 use alloc::{
     boxed::Box,
     collections::BTreeMap,
-    rc::Rc,
     string::{String, ToString},
-    sync::Arc,
 };
-use avagarden::sync::Mutex;
-use futures_core::Future;
+
+#[cfg(feature = "async")]
+use futures_core::{ready, Future};
+use locket::LockApiWriteGuard;
+#[cfg(feature = "async")]
 use pin_project_lite::pin_project;
 
 use super::{
     method::MethodCallable,
     service::Service,
     state::{HasState, StateType, SyncState},
-    LocalBoxAsyncMethodCallable,
+    State,
 };
 #[cfg(feature = "async")]
 use super::{
     method::{AsyncMethodCallable, BoxAsyncMethodCallable},
     service::AsyncService,
     state::AsyncStateType,
+    LocalBoxAsyncMethodCallable,
 };
 
 use crate::{arguments::Arguments, Error, Value};
@@ -60,15 +60,15 @@ pub struct DynService<T: HasState, S: ServiceType, C, V: Value> {
     methods: BTreeMap<String, S::Callable<T::State, C, V>>,
 }
 
-impl<T, S, C, V: Value> DynService<T, S, C, V>
-where
-    S: ServiceType,
-    T: HasState,
-{
-    fn method(&self, name: &str) -> Option<&S::Callable<T::State, C, V>> {
-        self.methods.get(name)
-    }
-}
+// impl<T, S, C, V: Value> DynService<T, S, C, V>
+// where
+//     S: ServiceType,
+//     T: HasState,
+// {
+//     fn method(&self, name: &str) -> Option<&S::Callable<T::State, C, V>> {
+//         self.methods.get(name)
+//     }
+// }
 
 impl<T, C, V: Value> DynService<T, Sync, C, V>
 where
@@ -155,33 +155,40 @@ where
     S: ServiceType + 'static,
     S::Callable<T::State, C, V>: AsyncMethodCallable<T::State, C, V>,
     T: AsyncStateType<V>,
+    T::State: State<V>,
     V: Value,
     for<'a> T: 'a,
     for<'a> V: 'a,
     for<'a> C: 'a,
 {
-    type Get<'a> = T::Get<'a>;
-    type Set<'a> = T::Set<'a>;
-    type Call<'a> = T::Call<'a, AsyncMethodCallFuture<'a, S, T, C, V>>;
+    type Get<'a> = GetFuture<'a, T, V>;
+    type Set<'a> = SetFuture<'a, T, V>;
+    type Call<'a> = AsyncMethodCallFuture<'a, S, T, C, V>;
 
     fn set_value<'a>(&'a self, name: &'a str, value: V) -> Self::Set<'a> {
-        self.state.set(name, value)
+        let future = self.state.get();
+        SetFuture {
+            future,
+            name,
+            value: Some(value),
+        }
     }
 
     fn get_value<'a>(&'a self, name: &'a str) -> Self::Get<'a> {
-        self.state.get(name)
+        let future = self.state.get();
+        GetFuture { future, name }
     }
 
     fn call<'a>(&'a self, ctx: &'a mut C, name: &'a str, args: Arguments<V>) -> Self::Call<'a> {
-        self.state.call(|state| AsyncMethodCallFuture {
+        AsyncMethodCallFuture {
             state: AsyncMethodCallFutureState::Init {
                 methods: &self.methods,
-                state: Some(state),
+                state: self.state.get(),
                 name,
                 ctx: Some(ctx),
                 args: Some(args),
             },
-        })
+        }
     }
 }
 
@@ -190,21 +197,26 @@ where
     S: ServiceType + 'static,
     S::Callable<T::State, C, V>: MethodCallable<T::State, C, V>,
     T: StateType<V>,
+    T::State: State<V>,
     V: Value,
 {
     fn set_value(&self, name: &str, value: V) -> Result<(), Error<V>> {
-        self.state.set(name, value)
+        let mut lock = self.state.get()?;
+        lock.get_mut().set(name, value)
     }
 
     fn get_value(&self, name: &str) -> Result<Option<V>, Error<V>> {
-        self.state.get(name)
+        let mut lock = self.state.get()?;
+        lock.get_mut().get(name)
     }
 
     fn call(&self, ctx: &mut C, name: &str, args: Arguments<V>) -> Result<V, Error<V>> {
         let Some(method) = self.methods.get(name) else {
             return Err(Error::MethodNotFound);
         };
-        self.state.call(|state| method.call(state, ctx, args))
+
+        let mut lock = self.state.get()?;
+        method.call(lock.get_mut(), ctx, args)
     }
 }
 
@@ -214,16 +226,20 @@ pin_project! {
     pub enum AsyncMethodCallFutureState<'a, S: ServiceType, T: AsyncStateType<V>, C, V: Value>
     where
         V: 'static,
-        S::Callable<T::State, C, V>: AsyncMethodCallable<T::State, C, V>
+        S::Callable<T::State, C, V>: AsyncMethodCallable<T::State, C, V>,
+        T::State: 'a,
+        T: 'a
     {
         Init {
             methods: &'a BTreeMap<String, S::Callable<T::State, C, V>>,
-            state: Option<&'a mut T::State>,
+            #[pin]
+            state: T::Future<'a>,
             ctx: Option<&'a mut C>,
             name: &'a str,
             args: Option<Arguments<V>>
         },
         Call {
+            state: T::Ref<'a>,
             #[pin]
             future: <S::Callable<T::State, C, V> as AsyncMethodCallable<T::State, C, V>>::Future<'a>,
         },
@@ -243,6 +259,7 @@ pin_project! {
     }
 }
 
+#[cfg(feature = "async")]
 impl<'a, S: ServiceType, T: AsyncStateType<V>, C, V: Value> core::future::Future
     for AsyncMethodCallFuture<'a, S, T, C, V>
 where
@@ -264,6 +281,11 @@ where
                     name,
                     args,
                 } => {
+                    let mut state = match ready!(state.poll(cx)) {
+                        Ok(ret) => ret,
+                        Err(err) => return core::task::Poll::Ready(Err(err.into())),
+                    };
+
                     let Some(method) = methods.get(*name) else {
                         this.state.set(AsyncMethodCallFutureState::Done);
                         return core::task::Poll::Ready(Err(Error::MethodNotFound));
@@ -271,13 +293,17 @@ where
 
                     let ctx = ctx.take().expect("ctx");
                     let args = args.take().expect("args");
-                    let state = state.take().expect("state");
+                    // let state = state.take().expect("state");
 
-                    let future = method.call_async(state, ctx, args);
+                    let unsafe_state = &mut state as *mut <T as AsyncStateType<V>>::Ref<'a>;
 
-                    this.state.set(AsyncMethodCallFutureState::Call { future })
+                    let future =
+                        method.call_async(unsafe { &mut *unsafe_state }.get_mut(), ctx, args);
+
+                    this.state
+                        .set(AsyncMethodCallFutureState::Call { state, future })
                 }
-                Proj::Call { future } => {
+                Proj::Call { future, .. } => {
                     let ret = futures_core::ready!(future.poll(cx));
 
                     this.state.set(AsyncMethodCallFutureState::Done);
@@ -288,6 +314,66 @@ where
                     panic!("poll after done")
                 }
             }
+        }
+    }
+}
+
+pin_project! {
+    pub struct GetFuture<'a, S: 'a,V> where S: AsyncStateType<V>, V: Value  {
+        #[pin]
+        future: S::Future<'a>,
+        name: &'a str,
+    }
+}
+
+impl<'a, S, V> Future for GetFuture<'a, S, V>
+where
+    S: AsyncStateType<V> + 'a,
+    S::State: State<V>,
+    V: Value,
+{
+    type Output = Result<Option<V>, Error<V>>;
+
+    fn poll(
+        self: core::pin::Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+    ) -> core::task::Poll<Self::Output> {
+        let this = self.project();
+        match ready!(this.future.poll(cx)) {
+            Ok(mut ret) => core::task::Poll::Ready(ret.get_mut().get(&this.name)),
+            Err(err) => core::task::Poll::Ready(Err(err.into())),
+        }
+    }
+}
+
+pin_project! {
+    pub struct SetFuture<'a, S: 'a, V> where S: AsyncStateType<V>, V: Value {
+        #[pin]
+        future: S::Future<'a>,
+        name: &'a str,
+        value: Option<V>
+    }
+}
+
+impl<'a, S, V> Future for SetFuture<'a, S, V>
+where
+    S: AsyncStateType<V>,
+    S::State: State<V>,
+    V: Value,
+{
+    type Output = Result<(), Error<V>>;
+
+    fn poll(
+        self: core::pin::Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+    ) -> core::task::Poll<Self::Output> {
+        let this = self.project();
+        match ready!(this.future.poll(cx)) {
+            Ok(mut ret) => core::task::Poll::Ready(
+                ret.get_mut()
+                    .set(&this.name, this.value.take().expect("value")),
+            ),
+            Err(err) => core::task::Poll::Ready(Err(err.into())),
         }
     }
 }

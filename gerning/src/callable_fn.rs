@@ -1,9 +1,9 @@
 #[cfg(feature = "async")]
 use crate::callable_async::AsyncCallable;
-#[cfg(feature = "async")]
 use core::marker::PhantomData;
 #[cfg(feature = "async")]
-use core::{pin::Pin};
+use core::pin::Pin;
+#[cfg(feature = "async")]
 use pin_project_lite::pin_project;
 
 use crate::{
