@@ -15,7 +15,6 @@ async = [
     "async-lock",
 ]
 service = ["locket"]
-
 std = ["avagarden/std", "locket?/parking_lot"]
 
 
