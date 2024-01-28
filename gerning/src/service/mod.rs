@@ -7,7 +7,7 @@ pub use self::{
     dyn_service::*,
     method::*,
     service::*,
-    state::{SendState, State, SyncState},
+    state::{HasState, SendState, State, SyncState},
 };
 
 #[cfg(feature = "async")]
