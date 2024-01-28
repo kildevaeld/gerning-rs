@@ -72,18 +72,23 @@ impl<T: State<V> + 'static, V: Value> AsyncStateType<V> for SendState<T> {
     }
 }
 
+#[cfg(feature = "async")]
 pub struct AsyncState<T> {
     state: Arc<async_lock::Mutex<T>>,
 }
 
+#[cfg(feature = "async")]
 unsafe impl<T: Send> Send for AsyncState<T> {}
 
+#[cfg(feature = "async")]
 unsafe impl<T: Send> Sync for AsyncState<T> {}
 
+#[cfg(feature = "async")]
 impl<T> HasState for AsyncState<T> {
     type State = T;
 }
 
+#[cfg(feature = "async")]
 impl<T> AsyncState<T> {
     pub fn new(state: T) -> AsyncState<T> {
         AsyncState {

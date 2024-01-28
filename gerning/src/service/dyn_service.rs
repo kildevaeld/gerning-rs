@@ -318,6 +318,7 @@ where
     }
 }
 
+#[cfg(feature = "async")]
 pin_project! {
     pub struct GetFuture<'a, S: 'a,V> where S: AsyncStateType<V>, V: Value  {
         #[pin]
@@ -326,6 +327,7 @@ pin_project! {
     }
 }
 
+#[cfg(feature = "async")]
 impl<'a, S, V> Future for GetFuture<'a, S, V>
 where
     S: AsyncStateType<V> + 'a,
@@ -346,6 +348,7 @@ where
     }
 }
 
+#[cfg(feature = "async")]
 pin_project! {
     pub struct SetFuture<'a, S: 'a, V> where S: AsyncStateType<V>, V: Value {
         #[pin]
@@ -355,6 +358,7 @@ pin_project! {
     }
 }
 
+#[cfg(feature = "async")]
 impl<'a, S, V> Future for SetFuture<'a, S, V>
 where
     S: AsyncStateType<V>,
