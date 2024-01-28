@@ -78,6 +78,14 @@ impl<T: Value> Arguments<T> {
     }
 }
 
+impl<T> IntoIterator for Arguments<T> {
+    type IntoIter = alloc::vec::IntoIter<T>;
+    type Item = T;
+    fn into_iter(self) -> Self::IntoIter {
+        self.args.into_iter()
+    }
+}
+
 #[derive(Debug)]
 pub struct ArgumentsBuilder<V> {
     args: Vec<V>,
