@@ -40,6 +40,17 @@ impl<T: Value> Arguments<T> {
         V::try_from(val).map_err(|err| err.into())
     }
 
+    pub fn try_take<'a, V: TryFrom<T>>(&'a mut self, idx: usize) -> Result<V, ArgumentError<T>>
+    where
+        V::Error: Into<ArgumentError<T>>,
+    {
+        if idx >= self.args.len() {
+            return Err(ArgumentError::IndexOutOfBounds(idx));
+        }
+        let val = self.args.remove(idx);
+        V::try_from(val).map_err(|err| err.into())
+    }
+
     // pub fn try_get<V: TryFrom<T>>(&self, idx: usize) -> Result<V, ArgumentError<T>>
     // where
     //     V::Error: Into<ArgumentError<T>>,

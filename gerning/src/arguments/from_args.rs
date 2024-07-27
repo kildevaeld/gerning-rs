@@ -7,14 +7,14 @@ use core::convert::Infallible;
 
 pub trait FromArguments<'a, T: Value>: Sized + Send {
     type Error: Into<ArgumentError<T>>;
-    fn from_arguments(args: &'a Arguments<T>) -> Result<Self, Self::Error>;
+    fn from_arguments(args: &'a mut Arguments<T>) -> Result<Self, Self::Error>;
 
     fn parameters() -> Parameters<T>;
 }
 
 impl<'a, T: Value> FromArguments<'a, T> for () {
     type Error = Infallible;
-    fn from_arguments(_args: &'a Arguments<T>) -> Result<Self, Self::Error> {
+    fn from_arguments(_args: &'a mut Arguments<T>) -> Result<Self, Self::Error> {
         Ok(())
     }
 
@@ -44,7 +44,7 @@ macro_rules! arguments {
             $first::Error: Into<ArgumentError<V>>
         {
             type Error = ArgumentError<V>;
-            fn from_arguments(args: &'a Arguments<V>) -> Result<Self, Self::Error> {
+            fn from_arguments(args: &'a mut Arguments<V>) -> Result<Self, Self::Error> {
                 Ok((args.try_get_ref::<$first>(0)?,))
             }
 
@@ -68,7 +68,7 @@ macro_rules! arguments {
         {
             type Error = ArgumentError<V>;
             #[allow(non_snake_case)]
-            fn from_arguments(args: &'a Arguments<V>) -> Result<Self, Self::Error> {
+            fn from_arguments(args: &'a mut Arguments<V>) -> Result<Self, Self::Error> {
 
                 count!(@step 0, args, $first, $($rest),*);
 

@@ -64,8 +64,8 @@ where
         )
     }
 
-    fn call<'a>(&self, ctx: &'a mut C, args: Arguments<V>) -> Result<V, Error<V>> {
-        let args = A::from_arguments(&args).map_err(|err| err.into())?;
+    fn call<'a>(&self, ctx: &'a mut C, mut args: Arguments<V>) -> Result<V, Error<V>> {
+        let args = A::from_arguments(&mut args).map_err(|err| err.into())?;
 
         Ok(self
             .func

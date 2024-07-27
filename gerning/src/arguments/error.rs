@@ -7,6 +7,7 @@ pub enum ArgumentError<T: Value> {
     Infallible,
     IvalidType { expected: T::Type, found: T::Type },
     Missing { index: usize, arity: usize },
+    IndexOutOfBounds(usize),
 }
 
 impl<T: Value> fmt::Display for ArgumentError<T>
@@ -23,6 +24,9 @@ where
             }
             ArgumentError::Missing { index, .. } => {
                 write!(f, "missing argument at index: {index:}")
+            }
+            ArgumentError::IndexOutOfBounds(idx) => {
+                write!(f, "index out of bounds: {idx}")
             }
         }
     }
