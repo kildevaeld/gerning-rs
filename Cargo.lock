@@ -217,6 +217,7 @@ dependencies = [
  "hashbrown",
  "locket",
  "pin-project-lite",
+ "serde",
 ]
 
 [[package]]

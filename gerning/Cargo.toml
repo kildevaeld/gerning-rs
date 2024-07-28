@@ -16,6 +16,7 @@ async = [
 ]
 service = ["locket", "hashbrown"]
 std = ["avagarden/std", "locket?/parking_lot"]
+serde = ["dep:serde"]
 
 
 [dependencies]
@@ -29,6 +30,7 @@ locket = { git = "https://github.com/kildevaeld/locket-rs", optional = true, fea
 ] }
 async-lock = { version = "3", optional = true, default-features = false }
 hashbrown = { version = "0.14", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 futures = { version = "0.3" }
