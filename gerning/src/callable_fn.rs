@@ -96,8 +96,8 @@ where
         )
     }
 
-    fn call_async<'a>(&'a self, ctx: &'a mut C, args: Arguments<V>) -> Self::Future<'a> {
-        let state = match A::from_arguments(&args).map_err(|err| err.into()) {
+    fn call_async<'a>(&'a self, ctx: &'a mut C, mut args: Arguments<V>) -> Self::Future<'a> {
+        let state = match A::from_arguments(&mut args).map_err(|err| err.into()) {
             Err(err) => CallableFuncFutureState::Error {
                 error: Some(err.into()),
             },

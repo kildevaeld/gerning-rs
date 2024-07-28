@@ -6,6 +6,7 @@ use alloc::{
 
 #[cfg(feature = "async")]
 use futures_core::{ready, Future};
+use hashbrown::HashMap;
 use locket::LockApiWriteGuard;
 #[cfg(feature = "async")]
 use pin_project_lite::pin_project;
@@ -24,7 +25,7 @@ use super::{
     LocalBoxAsyncMethodCallable,
 };
 
-use crate::{arguments::Arguments, Error, Value};
+use crate::{arguments::Arguments, signature::Signature, Error, Value};
 pub trait ServiceType {
     type Callable<S, C, V>;
     type State<T>;
@@ -165,6 +166,16 @@ where
     type Set<'a> = SetFuture<'a, T, V>;
     type Call<'a> = AsyncMethodCallFuture<'a, S, T, C, V>;
 
+    fn signature(&self) -> super::ServiceSignature<V> {
+        let mut map: HashMap<String, Signature<V>> = HashMap::default();
+
+        for (name, call) in &self.methods {
+            map.insert(name.clone(), call.signature());
+        }
+
+        map.into()
+    }
+
     fn set_value<'a>(&'a self, name: &'a str, value: V) -> Self::Set<'a> {
         let future = self.state.get();
         SetFuture {
@@ -200,6 +211,16 @@ where
     T::State: State<V>,
     V: Value,
 {
+    fn signature(&self) -> super::ServiceSignature<V> {
+        let mut map: HashMap<String, Signature<V>> = HashMap::default();
+
+        for (name, call) in &self.methods {
+            map.insert(name.clone(), call.signature());
+        }
+
+        map.into()
+    }
+
     fn set_value(&self, name: &str, value: V) -> Result<(), Error<V>> {
         let mut lock = self.state.get()?;
         lock.get_mut().set(name, value)

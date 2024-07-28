@@ -1,9 +1,11 @@
+mod boxed;
 mod dyn_service;
 mod method;
 mod service;
 mod state;
 
 pub use self::{
+    boxed::*,
     dyn_service::*,
     method::*,
     service::*,
