@@ -203,8 +203,8 @@ mod async_method_impl {
     funcs!(T1 T2 T3 T4 T5 T6 T7 T8);
 }
 
-// #[cfg(all(feature = "service", feature = "async"))]
-// pub use async_method_impl::*;
+#[cfg(all(feature = "service", feature = "async"))]
+pub use async_method_impl::*;
 
 // #[cfg(all(feature = "service", not(feature = "async")))]
 // mod method_impl {
@@ -260,7 +260,6 @@ mod async_method_impl {
 //                  F: Fn(&mut C, $first, $($rest),*) -> U + 'static,
 //                  U: Future,
 //                  for<'a> U: 'a
-
 
 //             {
 //                 type Output = U::Output;
