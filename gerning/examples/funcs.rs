@@ -13,16 +13,24 @@ use gerning::{
 #[derive(Debug, Clone)]
 pub enum Value {
     String(String),
+    Void,
 }
 
 #[derive(Debug)]
 pub enum Type {
     String,
+    Void,
 }
 
 impl From<String> for Value {
     fn from(value: String) -> Self {
         Value::String(value)
+    }
+}
+
+impl From<()> for Value {
+    fn from(value: ()) -> Self {
+        Value::Void
     }
 }
 
@@ -80,6 +88,7 @@ impl gerning::Value for Value {
     fn get_type(&self) -> Self::Type {
         match self {
             Value::String(_) => Type::String,
+            Value::Void => Type::Void,
         }
     }
 }
@@ -87,6 +96,12 @@ impl gerning::Value for Value {
 impl gerning::Typed<Value> for String {
     fn get_type() -> <Value as gerning::Value>::Type {
         Type::String
+    }
+}
+
+impl gerning::Typed<Value> for () {
+    fn get_type() -> <Value as gerning::Value>::Type {
+        Type::Void
     }
 }
 
@@ -114,10 +129,46 @@ async fn method<F: AsyncFunc<(), (String,)>>(func: F) {
     func.call(&mut (), (String::from("value"),)).await;
 }
 
+struct TestService;
+
+impl TestService {
+    fn test(&self) -> &str {
+        "Hello, World"
+    }
+}
+
+impl<C, V: gerning::Value> Service<C, V> for TestService
+where
+    for<'a> V: From<&'a str>,
+{
+    fn signature(&self) -> gerning::service::ServiceSignature<V> {
+        todo!()
+    }
+
+    // fn set_value(&self, name: &str, value: Value) -> Result<(), Error<Value>> {
+    //     todo!()
+    // }
+
+    // fn get_value(&self, name: &str) -> Result<Option<Value>, Error<Value>> {
+    //     todo!()
+    // }
+
+    fn call(&self, ctx: &mut C, name: &str, args: Arguments<V>) -> Result<V, Error<V>> {
+        match name {
+            "test" => Ok(self.test().into()),
+            _ => Err(Error::MethodNotFound),
+        }
+    }
+}
+
 fn main() -> Result<(), Error<Value>> {
     let callable = test.callable();
     // let async_callable = test_async.callable();
 
+    let service = TestService;
+
+    let ret: Result<Value, Error<_>> = service.call(&mut (), "test", ().to_arguments());
+    println!("RET: {:?}", ret);
     println!("Signature: {:?}", callable.signature());
 
     let ret = callable.call(&mut (), ("",).to_arguments())?;
@@ -139,7 +190,17 @@ fn main() -> Result<(), Error<Value>> {
         },
     );
 
-    service.set_value("state", "What a wonderful world".into())?;
+    service.register(
+        "set_test",
+        |this: &mut BTreeMap<String, Value>, ctx: &mut (), args: Arguments<Value>| {
+            this.set("state", args.get(0).cloned().unwrap())?;
+            Ok::<_, Error<_>>(())
+        },
+    );
+
+    // service.set_value("state", "What a wonderful world".into())?;
+
+    service.call(&mut (), "set_test", ("Hello, State",).to_arguments())?;
 
     let ret = service.call(&mut (), "test", Arguments::default())?;
 
@@ -151,9 +212,9 @@ fn main() -> Result<(), Error<Value>> {
     service.register::<TestAsync>("test", TestAsync);
 
     futures::executor::block_on(async move {
-        service
-            .set_value("state", "What a wonderful world async".into())
-            .await?;
+        // service
+        //     .set_value("state", "What a wonderful world async".into())
+        //     .await?;
 
         let ret = service.call(&mut (), "test", Arguments::default()).await?;
 

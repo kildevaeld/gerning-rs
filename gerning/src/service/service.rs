@@ -34,19 +34,19 @@ impl<T: Value> ServiceSignature<T> {
 
 pub trait Service<C, V: Value> {
     fn signature(&self) -> ServiceSignature<V>;
-    fn set_value(&self, name: &str, value: V) -> Result<(), Error<V>>;
-    fn get_value(&self, name: &str) -> Result<Option<V>, Error<V>>;
+    // fn set_value(&self, name: &str, value: V) -> Result<(), Error<V>>;
+    // fn get_value(&self, name: &str) -> Result<Option<V>, Error<V>>;
     fn call(&self, ctx: &mut C, name: &str, args: Arguments<V>) -> Result<V, Error<V>>;
 }
 
 #[cfg(feature = "async")]
 pub trait AsyncService<C, V: Value> {
-    type Get<'a>: Future<Output = Result<Option<V>, Error<V>>>
-    where
-        Self: 'a;
-    type Set<'a>: Future<Output = Result<(), Error<V>>>
-    where
-        Self: 'a;
+    // type Get<'a>: Future<Output = Result<Option<V>, Error<V>>>
+    // where
+    //     Self: 'a;
+    // type Set<'a>: Future<Output = Result<(), Error<V>>>
+    // where
+    //     Self: 'a;
     type Call<'a>: Future<Output = Result<V, Error<V>>>
     where
         Self: 'a,
@@ -54,8 +54,8 @@ pub trait AsyncService<C, V: Value> {
 
     fn signature(&self) -> ServiceSignature<V>;
 
-    fn set_value<'a>(&'a self, name: &'a str, value: V) -> Self::Set<'a>;
-    fn get_value<'a>(&'a self, name: &'a str) -> Self::Get<'a>;
+    // fn set_value<'a>(&'a self, name: &'a str, value: V) -> Self::Set<'a>;
+    // fn get_value<'a>(&'a self, name: &'a str) -> Self::Get<'a>;
     fn call<'a>(&'a self, ctx: &'a mut C, name: &'a str, args: Arguments<V>) -> Self::Call<'a>;
 }
 
@@ -66,8 +66,8 @@ pub trait AsyncServiceExt<C, V: Value>: AsyncService<C, V> {
         C: 'static,
         V: Value + 'static,
         Self: AsyncService<C, V> + Send + Sync + 'static + Sized,
-        for<'a> Self::Set<'a>: Send,
-        for<'a> Self::Get<'a>: Send,
+        // for<'a> Self::Set<'a>: Send,
+        // for<'a> Self::Get<'a>: Send,
         for<'a> Self::Call<'a>: Send,
     {
         super::box_service(self)

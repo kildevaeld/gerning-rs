@@ -9,8 +9,8 @@ mod r#async {
 
     pub trait DynamicAsyncService<C, V: Value> {
         fn signature(&self) -> ServiceSignature<V>;
-        fn set_value<'a>(&'a self, name: &'a str, value: V) -> BoxFuture<'a, Result<(), Error<V>>>;
-        fn get_value<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<Option<V>, Error<V>>>;
+        // fn set_value<'a>(&'a self, name: &'a str, value: V) -> BoxFuture<'a, Result<(), Error<V>>>;
+        // fn get_value<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<Option<V>, Error<V>>>;
         fn call<'a>(
             &'a self,
             ctx: &'a mut C,
@@ -24,13 +24,13 @@ mod r#async {
             (**self).signature()
         }
 
-        fn set_value<'a>(&'a self, name: &'a str, value: V) -> BoxFuture<'a, Result<(), Error<V>>> {
-            (**self).set_value(name, value)
-        }
+        // fn set_value<'a>(&'a self, name: &'a str, value: V) -> BoxFuture<'a, Result<(), Error<V>>> {
+        //     (**self).set_value(name, value)
+        // }
 
-        fn get_value<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<Option<V>, Error<V>>> {
-            (**self).get_value(name)
-        }
+        // fn get_value<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<Option<V>, Error<V>>> {
+        //     (**self).get_value(name)
+        // }
 
         fn call<'a>(
             &'a self,
@@ -48,20 +48,20 @@ mod r#async {
     where
         V: Value + 'static,
         T: AsyncService<C, V>,
-        for<'a> T::Set<'a>: Send,
-        for<'a> T::Get<'a>: Send,
+        // for<'a> T::Set<'a>: Send,
+        // for<'a> T::Get<'a>: Send,
         for<'a> T::Call<'a>: Send,
     {
         fn signature(&self) -> ServiceSignature<V> {
             self.0.signature()
         }
-        fn set_value<'a>(&'a self, name: &'a str, value: V) -> BoxFuture<'a, Result<(), Error<V>>> {
-            Box::pin(self.0.set_value(name, value))
-        }
+        // fn set_value<'a>(&'a self, name: &'a str, value: V) -> BoxFuture<'a, Result<(), Error<V>>> {
+        //     Box::pin(self.0.set_value(name, value))
+        // }
 
-        fn get_value<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<Option<V>, Error<V>>> {
-            Box::pin(self.0.get_value(name))
-        }
+        // fn get_value<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<Option<V>, Error<V>>> {
+        //     Box::pin(self.0.get_value(name))
+        // }
 
         fn call<'a>(
             &'a self,
@@ -74,9 +74,9 @@ mod r#async {
     }
 
     impl<C: 'static, V: Value + 'static> AsyncService<C, V> for BoxAsyncService<C, V> {
-        type Get<'a> = BoxFuture<'a, Result<Option<V>, Error<V>>>;
+        // type Get<'a> = BoxFuture<'a, Result<Option<V>, Error<V>>>;
 
-        type Set<'a> = BoxFuture<'a, Result<(), Error<V>>>;
+        // type Set<'a> = BoxFuture<'a, Result<(), Error<V>>>;
 
         type Call<'a> = BoxFuture<'a, Result<V, Error<V>>>;
 
@@ -84,13 +84,13 @@ mod r#async {
             <Self as DynamicAsyncService<C, V>>::signature(self)
         }
 
-        fn set_value<'a>(&'a self, name: &'a str, value: V) -> Self::Set<'a> {
-            <Self as DynamicAsyncService<C, V>>::set_value(self, name, value)
-        }
+        // fn set_value<'a>(&'a self, name: &'a str, value: V) -> Self::Set<'a> {
+        //     <Self as DynamicAsyncService<C, V>>::set_value(self, name, value)
+        // }
 
-        fn get_value<'a>(&'a self, name: &'a str) -> Self::Get<'a> {
-            <Self as DynamicAsyncService<C, V>>::get_value(self, name)
-        }
+        // fn get_value<'a>(&'a self, name: &'a str) -> Self::Get<'a> {
+        //     <Self as DynamicAsyncService<C, V>>::get_value(self, name)
+        // }
 
         fn call<'a>(&'a self, ctx: &'a mut C, name: &'a str, args: Arguments<V>) -> Self::Call<'a> {
             <Self as DynamicAsyncService<C, V>>::call(self, ctx, name, args)
@@ -102,8 +102,8 @@ mod r#async {
         C: 'static,
         V: Value + 'static,
         T: AsyncService<C, V> + Send + Sync + 'static,
-        for<'a> T::Set<'a>: Send,
-        for<'a> T::Get<'a>: Send,
+        // for<'a> T::Set<'a>: Send,
+        // for<'a> T::Get<'a>: Send,
         for<'a> T::Call<'a>: Send,
     {
         Box::new(BoxedDynamicAsyncService(service))

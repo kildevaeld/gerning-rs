@@ -156,14 +156,14 @@ where
     S: ServiceType + 'static,
     S::Callable<T::State, C, V>: AsyncMethodCallable<T::State, C, V>,
     T: AsyncStateType<V>,
-    T::State: State<V>,
+    // T::State: State<V>,
     V: Value,
     for<'a> T: 'a,
     for<'a> V: 'a,
     for<'a> C: 'a,
 {
-    type Get<'a> = GetFuture<'a, T, V>;
-    type Set<'a> = SetFuture<'a, T, V>;
+    // type Get<'a> = GetFuture<'a, T, V>;
+    // type Set<'a> = SetFuture<'a, T, V>;
     type Call<'a> = AsyncMethodCallFuture<'a, S, T, C, V>;
 
     fn signature(&self) -> super::ServiceSignature<V> {
@@ -176,19 +176,19 @@ where
         map.into()
     }
 
-    fn set_value<'a>(&'a self, name: &'a str, value: V) -> Self::Set<'a> {
-        let future = self.state.get();
-        SetFuture {
-            future,
-            name,
-            value: Some(value),
-        }
-    }
+    // fn set_value<'a>(&'a self, name: &'a str, value: V) -> Self::Set<'a> {
+    //     let future = self.state.get();
+    //     SetFuture {
+    //         future,
+    //         name,
+    //         value: Some(value),
+    //     }
+    // }
 
-    fn get_value<'a>(&'a self, name: &'a str) -> Self::Get<'a> {
-        let future = self.state.get();
-        GetFuture { future, name }
-    }
+    // fn get_value<'a>(&'a self, name: &'a str) -> Self::Get<'a> {
+    //     let future = self.state.get();
+    //     GetFuture { future, name }
+    // }
 
     fn call<'a>(&'a self, ctx: &'a mut C, name: &'a str, args: Arguments<V>) -> Self::Call<'a> {
         AsyncMethodCallFuture {
@@ -208,7 +208,7 @@ where
     S: ServiceType + 'static,
     S::Callable<T::State, C, V>: MethodCallable<T::State, C, V>,
     T: StateType<V>,
-    T::State: State<V>,
+    // T::State: State<V>,
     V: Value,
 {
     fn signature(&self) -> super::ServiceSignature<V> {
@@ -221,15 +221,15 @@ where
         map.into()
     }
 
-    fn set_value(&self, name: &str, value: V) -> Result<(), Error<V>> {
-        let mut lock = self.state.get()?;
-        lock.get_mut().set(name, value)
-    }
+    // fn set_value(&self, name: &str, value: V) -> Result<(), Error<V>> {
+    //     let mut lock = self.state.get()?;
+    //     lock.get_mut().set(name, value)
+    // }
 
-    fn get_value(&self, name: &str) -> Result<Option<V>, Error<V>> {
-        let mut lock = self.state.get()?;
-        lock.get_mut().get(name)
-    }
+    // fn get_value(&self, name: &str) -> Result<Option<V>, Error<V>> {
+    //     let mut lock = self.state.get()?;
+    //     lock.get_mut().get(name)
+    // }
 
     fn call(&self, ctx: &mut C, name: &str, args: Arguments<V>) -> Result<V, Error<V>> {
         let Some(method) = self.methods.get(name) else {
